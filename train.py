@@ -16,11 +16,11 @@ from DenseASPP-master.models.DenseASPP import DenseASPP
 
 def read_data(num_data,root='.'):
     val_list = np.random.choice(np.arange(1,num_data+1),int(num_data/5))
-    train_list = no.setdiff1d(np.arange(1,num_data+1),val_list)
+    train_list = np.setdiff1d(np.arange(1,num_data+1),val_list)
     
-    data_train = [os.path.join(root,'train','data'+str(i)+'.npy')for i in train_list]
+    data_train = [os.path.join(root,'data','data'+str(i)+'.npy')for i in train_list]
     label_train = [os.path.join(root,'label','label'+str(i)+'.npy')for i in train_list]
-    data_val = [os.path.join(root,'train','data'+str(i)+'.npy')for i in val_list]
+    data_val = [os.path.join(root,'data','data'+str(i)+'.npy')for i in val_list]
     label_val = [os.path.join(root,'label','label'+str(i)+'.npy')for i in val_list]
     
     return data_train,label_train,data_val,label_val
@@ -33,6 +33,14 @@ def normalization(img):
     return newimg * 2 - 1
 
 def transforms(data,label):
+    data = np.split(data,[8,328,336])[1]
+    data = np.split(data,[8,328,336],axis=1)[1]
+    label = np.split(label,[8,328,336])[1]
+    label = np.split(label,[8,328,336],axis=1)[1]
+    
+    data = np.reshape(data,(3,320,320))
+    label = np.reshape(label,(3,320,320))
+    
     data = normalization(data)
     data = torch.from_numpy(data)
     label = torch.from_numpy(label)
@@ -52,7 +60,7 @@ class dataset(dt.Dataset):
         data = np.load(self.data_list[idx])
         label = np.load(self.data_list[idx])
         
-        if transform is not None:
+        if self.transform is not None:
             data,label = self.transform(data,label)
         return data,label
     
@@ -86,8 +94,8 @@ def accuracy(data,label):
 def train():
     voc_train = dataset(True,transforms)
     voc_test = dataset(False,transforms)    
-    train_data = dt.DataLoader(voc_train, batch_size=8, num_workers=2)
-    valid_data = dt.DataLoader(voc_test, batch_size=8, num_workers=2)
+    train_data = dt.DataLoader(voc_train, batch_size=1, num_workers=2)
+    valid_data = dt.DataLoader(voc_test, batch_size=1, num_workers=2)
 
     model = DenseASPP(Model_CFG, n_class=2, output_stride=8)
     criterion = DiceLoss()
@@ -101,12 +109,17 @@ def train():
         train_loss = 0
         train_acc = 0
         model = model.train()
+        model = model.cuda()
         for Data in train_data:
-            data_batch = Variable(Date[0].cuda())
+            data_batch = Variable(Data[0].cuda())
             label_batch = Variable(Data[1].cuda())
 
-            output = model(data_batch)
+            output = model(data_batch) 
             output = F.log_softmax(output,dim=1)
+
+            test =  output.data.cpu().numpy()
+            print (test.shape)
+            
             loss = criterion(output,label_batch)
 
             optimizer.zero_grad()
@@ -114,11 +127,12 @@ def train():
             optimizer.step()
             train_loss += loss.data[0]
 
-            train_pred = output.data.cpu().numpy() #加.max[1]是啥意思？
+            train_pred = output.data.cpu().numpy() 
             train_true = label_batch.data.cpu().numpy()
             train_acc += accuracy(train_pred,train_true)
 
         model = model.eval()
+        model = model.cuda()
         eval_loss = 0
         eval_acc = 0
         for Data in valid_data:
@@ -145,22 +159,8 @@ def train():
 
 
 if __name__ == '__main__':
-    train()
+    train()     
         
-
-
-
-
-
-
-            
-#path = 'F:\\lib and data\\beilun'
-#a,b = find_files(path)
-#produce_data(a,b)
-      
-        
-        
-    
 
 
 
